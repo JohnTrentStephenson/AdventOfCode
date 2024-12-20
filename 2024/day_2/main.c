@@ -76,7 +76,6 @@ int is_increasing(int (*arr)[MAX_COLUMNS], int row) {
             difference += arr[row][col] - arr[row][col-1];
         }
     }
-    printf("Difference for %d is %d\n", row, difference);
     if(difference > 0)
         return 1;
     else
@@ -91,33 +90,26 @@ int dampened_reports(int (*arr)[MAX_COLUMNS]){
         int is_dampened = 0;
 
         if(is_increasing(arr,rows)){
-            for(int cols = 1; cols < MAX_COLUMNS && arr[rows][cols] != 0; cols++)
-            {
+            for(int cols = 1; cols < MAX_COLUMNS && arr[rows][cols] != 0; cols++){
                 if(arr[rows][cols] <= arr[rows][cols-1] || arr[rows][cols] - arr[rows][cols-1] > 3){
-                        if(!is_dampened && arr[rows][cols+1]>arr[rows][cols-1] && arr[rows][cols+1] - arr[rows][cols-1] < 3 && arr[rows][cols+1] != 0){
+                        if(!is_dampened && arr[rows][cols+1]>arr[rows][cols-1] && arr[rows][cols+1] - arr[rows][cols-1] < 3 || arr[rows][cols+1] == 0){
                             is_dampened = 1;
                             cols++;
                         }
-                        else{
-                            if(arr[rows][cols+1]){
-                                is_safe = 0;
-                            }
-                        }
+                        else
+                            is_safe = 0;
                 }
             }
         }
         else{
             for(int cols = 1; cols < MAX_COLUMNS && arr[rows][cols] != 0; cols++){
-                if(arr[rows][cols-1] <= arr[rows][cols] || arr[rows][cols-1] - arr[rows][cols] > 3 && arr[rows][cols+1] != 0){
-                        if(!is_dampened && arr[rows][cols-1] > arr[rows][cols+1] && arr[rows][cols-1] - arr[rows][cols+1] < 3){
+                if(arr[rows][cols-1] <= arr[rows][cols] || arr[rows][cols-1] - arr[rows][cols] > 3){
+                        if(!is_dampened && arr[rows][cols-1] > arr[rows][cols+1] && arr[rows][cols-1] - arr[rows][cols+1] < 3 || arr[rows][cols+1] == 0){
                                 is_dampened = 1;
                                 cols++;
                         }
-                        else{
-                            if(arr[rows][cols+1]){
-                                is_safe = 0;
-                            }
-                        }
+                        else
+                            is_safe = 0;
                 }
             }
         }
