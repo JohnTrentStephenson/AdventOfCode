@@ -7,7 +7,7 @@
 
 // Reads and manages the data from input.txt
 void input_handler(int (*arr)[MAX_COLUMNS]) {
-    const char* filename = "input1.txt";
+    const char* filename = "input.txt";
     FILE *file = fopen(filename, "r");
     if (file == NULL) {
         perror("Error opening file");
@@ -16,7 +16,6 @@ void input_handler(int (*arr)[MAX_COLUMNS]) {
 
     // Reads the file line by line. Slices the line into multiple tokens by whitespace.
     char line[25];
-    int count = 0;
     int row = 0;
     while (fgets(line, sizeof(line), file)) {
         int col = 0;
@@ -92,7 +91,7 @@ int dampened_reports(int (*arr)[MAX_COLUMNS]){
         if(is_increasing(arr,rows)){
             for(int cols = 1; cols < MAX_COLUMNS && arr[rows][cols] != 0; cols++){
                 if(arr[rows][cols] <= arr[rows][cols-1] || arr[rows][cols] - arr[rows][cols-1] > 3){
-                        if(!is_dampened && arr[rows][cols+1]>arr[rows][cols-1] && arr[rows][cols+1] - arr[rows][cols-1] < 3 || arr[rows][cols+1] == 0){
+                        if( (!is_dampened && arr[rows][cols+1]>arr[rows][cols-1] && arr[rows][cols+1] - arr[rows][cols-1] < 3) || arr[rows][cols+1] == 0){
                             is_dampened = 1;
                             cols++;
                         }
@@ -104,7 +103,7 @@ int dampened_reports(int (*arr)[MAX_COLUMNS]){
         else{
             for(int cols = 1; cols < MAX_COLUMNS && arr[rows][cols] != 0; cols++){
                 if(arr[rows][cols-1] <= arr[rows][cols] || arr[rows][cols-1] - arr[rows][cols] > 3){
-                        if(!is_dampened && arr[rows][cols-1] > arr[rows][cols+1] && arr[rows][cols-1] - arr[rows][cols+1] < 3 || arr[rows][cols+1] == 0){
+                        if((!is_dampened && arr[rows][cols-1] > arr[rows][cols+1] && arr[rows][cols-1] - arr[rows][cols+1] < 3) || arr[rows][cols+1] == 0){
                                 is_dampened = 1;
                                 cols++;
                         }
