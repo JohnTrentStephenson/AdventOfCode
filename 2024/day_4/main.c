@@ -14,7 +14,7 @@ void input_handler(const char* filename) {
     char line[MAX];
 
     while (fgets(line, sizeof(line), file)) {
-        // Process the line (currently does nothing)
+        printf("%s", line);
     }
     fclose(file);
 }
