@@ -91,7 +91,7 @@ int main() {
 
     printf("The difference for part 1: %d\n",difference_score(first_list,second_list));
 
-    printf("The similarity for part 2: %d", similarity_score(first_list, second_list));
+    printf("The similarity for part 2: %d\n", similarity_score(first_list, second_list));
 
     return 0;
 }
