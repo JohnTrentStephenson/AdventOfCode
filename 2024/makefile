@@ -1,7 +1,7 @@
 # Compiler settings
 CC_LINUX = gcc
 CC_WINDOWS = x86_64-w64-mingw32-gcc
-CFLAGS = -Wall -Wextra -O2
+CFLAGS = -Wall -Wextra -O2 -ansi -std=c89
 
 # Directories and Files
 SRC_FILES := $(wildcard day_*/main.c)

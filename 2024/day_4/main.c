@@ -1,186 +1,126 @@
 #include <stdio.h>
+#include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
 
-#define SEARCH "XMAS"
 #define DIRECTIONS {{0,1},{1,1},{1,0},{1,-1},{0,-1},{-1,-1},{-1,0},{-1,1}}
-#define XSEARCH "MAS"
+#define PART1 "XMAS"
+#define PART2 "MAS"
+#define MAXDIMENSION 140
+
+char grid_data[MAXDIMENSION][MAXDIMENSION];
+
+#if defined(__WORDSIZE) && __WORDSIZE == 64/* Check for a 64 bit system (size_t is likely unsigned long long) */
+    #define SIZE_T_STATIC "%llu"
+    #define SIZE_T_DYNAMIC "%*llu"
+    #define PRINT_SIZE_T(x) (unsigned long long)(x)
+#else /* Assume 32-bit (size_t is likely unsigned long) */
+    #define SIZE_T_STATIC "%lu"
+    #define SIZE_T_DYNAMIC "%*lu"
+    #define PRINT_SIZE_T(x) (unsigned long)(x)
+#endif
 
 typedef struct{
-    int row;
-    int col;
+    size_t row;
+    size_t col;
 } Coordinate;
 
 typedef struct{
-    char **grid;
-    int rows;
-    int cols;
-} GridData;
-
-typedef struct{
     Coordinate *coordinates;
-    int matches;
+    size_t matches;
 } MatchedCoords;
 
-int debug = 0;
+/* Declarations */
+void fill_grid(const char* filename);
+char get_char(const size_t row, const size_t col);
+MatchedCoords matched_char_coords(const char search);
+int is_word_match(const size_t start_row, const size_t start_col, const int row_dir, const int col_dir, const char* target);
+int is_x_match(const size_t pivot_row, const size_t pivot_col, const char *target);
+size_t count_word_matches(const MatchedCoords *matched_coords, const char *target);
+size_t count_x_matches(const MatchedCoords *matched_coords, const char *target);
+void print_grid();
 
-// Reads and manages the data from the given file
-void input_handler(const char* filename, GridData *grid_data){
+/* Definitions */
+
+void fill_grid(const char* filename){
     FILE *file = fopen(filename, "r");
-    if (file == NULL) {
+    if (file == NULL){
         perror("Error opening file");
         exit(EXIT_FAILURE);
     }
 
-    int max_rows = 0;
-    int max_cols = 0;
-    char buffer[1024];
+    char buffer[MAXDIMENSION+2];
 
-    while(fgets(buffer, sizeof(buffer), file)) {
-        int length = strlen(buffer);
-        if(buffer[length - 1] == '\n') {
-            buffer[length - 1] = '\0';
-            length--;
-        }
-        if(!max_cols) max_cols = length;
-        else if(length != max_cols) {
-            fprintf(stderr, "Error: Input file can not contain rows of varying length.\n");
-            fclose(file);
-            exit(EXIT_FAILURE);
-        }
-        max_rows++;
-    }
-
-    grid_data->rows = max_rows;
-    grid_data->cols = max_cols;
-    grid_data->grid = (char **)malloc(max_rows * sizeof(char *));
-
-    if(grid_data->grid == NULL) {
-        perror("Error allocating memory for grid");
-        fclose(file);
-        exit(EXIT_FAILURE);
-    }
-    for (int i = 0; i < max_rows; i++) {
-        grid_data->grid[i] = (char *)malloc(max_cols * sizeof(char));
-        if(grid_data->grid[i] == NULL) {
-            perror("Error allocating memory for grid row");
-            for(int j = 0; j < i; j++) {
-                free(grid_data->grid[j]);
+    size_t rows_read;
+    for(rows_read = 0; rows_read < MAXDIMENSION; rows_read++){
+        if(fgets(buffer,MAXDIMENSION+2,file) == NULL){
+            if(ferror(file)){
+                perror("Error reading from file");
+                fclose(file);
+                exit(EXIT_FAILURE);
             }
-            free(grid_data->grid);
-            fclose(file);
-            exit(EXIT_FAILURE);
         }
-    }
-
-    rewind(file);
-
-    int row = 0;
-    while(fgets(buffer, sizeof(buffer), file)){
-        memcpy(grid_data->grid[row], buffer, max_cols);
-        row++;
+        memcpy(grid_data[rows_read],buffer,sizeof(char)*MAXDIMENSION);
     }
     fclose(file);
 }
-
-char get_char(const GridData *grid_data, int row, int col){
-    if(row >= 0 && row < grid_data->rows && col >=0 && col < grid_data->cols) return grid_data->grid[row][col]; else return'\0';
+/* Because we use an unsigned variable only upper bounds checking can be done. */
+char get_char(const size_t row, const size_t col){
+    if(row < MAXDIMENSION && col < MAXDIMENSION) return grid_data[row][col]; else return'\0';
 }
 
-void print_grid(const GridData *grid_data){
-    for (int row = 0; row < grid_data->rows; row++)
-    {
-        printf("Line %d: \t", row+1);
-        for(int col = 0; col < grid_data->cols; col++)
-        {
-            printf("%c",get_char(grid_data,row,col));
-        }
-        printf("\n");
-    }
-}
+MatchedCoords matched_char_coords(const char search){
+    MatchedCoords matched_coords;
+    matched_coords.coordinates = NULL;
+    matched_coords.matches = 0;
 
-int find_potential_matches(const GridData *grid_data, char search){
-    int potentials = 0;
-    for(int row = 0; row < grid_data->rows; row++){
-        for(int col = 0; col < grid_data->cols; col++){
-            if(get_char(grid_data,row,col) == search) potentials++;
-        }
-    }
-    return potentials;
-}
+    Coordinate buffer[MAXDIMENSION*MAXDIMENSION];
+    size_t index = 0;
 
-Coordinate *allocate_coordinate_array(int count){
-    Coordinate * coordinates = (Coordinate *)malloc(count * sizeof(Coordinate));
-    if(coordinates == NULL){
-        perror("Error allocating memory for coordinates");
-        exit(EXIT_FAILURE);
-    }
-    return coordinates;
-}
-
-void fill_coordinate_array(const GridData *grid_data, Coordinate *coordinates, char search)
-{
-    int index= 0;
-
-    for(int row = 0; row < grid_data->rows; row++){
-        for(int col = 0; col < grid_data->cols; col ++){
-            if(get_char(grid_data,row,col) == search){
-                coordinates[index].row = row;
-                coordinates[index].col = col;
+    size_t row,col;
+    for(row = 0; row < MAXDIMENSION; row++){
+        for(col = 0; col < MAXDIMENSION; col++){
+            if(get_char(row,col) == search){
+                buffer[index].row = row;
+                buffer[index].col = col;
                 index++;
             }
         }
     }
+    /* Allocate and fill the coordinate array if there are matches */
+    if(index > 0){
+        if(!(matched_coords.coordinates = malloc(index * sizeof(Coordinate)))){ perror("Error allocating memory for coordinates"); }
+        matched_coords.matches = index;
+        for(index = 0; index < matched_coords.matches; index++){ matched_coords.coordinates[index] = buffer[index]; }
+    }
+
+    return matched_coords;
 }
 
-void create_match_coords(const GridData *grid_data, MatchedCoords *matched_coords,const char search){
-    int matches = find_potential_matches(grid_data, search);
-    Coordinate *coordinates = allocate_coordinate_array(matches);
+int is_word_match(const size_t start_row, const size_t start_col, const int row_dir, const int col_dir, const char* target){
 
-    matched_coords->coordinates = coordinates;
-    matched_coords->matches = matches;
+    size_t length = strlen(target);
 
-    fill_coordinate_array(grid_data, matched_coords->coordinates, search);
+    /* Since the function is potentially subtracting from an unsigned number this logic checks if we have caused size_t to wrap.
+     * If it has that means the function would have tried to access a cell outside the bounds of the grid.
+     * If that happens the word is not valid and we can return 0.
+     * Since a check for wrapping from 0 to Max was needed, wrapping to 0 from Max is also checked for.*/
 
-    if(debug){
-       for(int i = 0;i < matched_coords->matches; i++)
-        {
-            printf("Starting Point %d: (%d, %d)\n",i+1,matched_coords->coordinates[i].row,matched_coords->coordinates[i].col);
-        }
+    size_t final_row, final_col;
+    final_row = (length -1) * row_dir + start_row;
+    final_col = (length -1) * col_dir + start_col;
+    if(row_dir < 0){ if(final_row > start_row) return 0; } else if(final_row < start_row) { return 0; }
+    if(col_dir < 0){ if(final_col > start_col) return 0; } else if(final_col < start_col) { return 0; }
 
+    size_t index;
+    for(index = 0; index < length; index++){
+        if(get_char(start_row + row_dir * index, start_col + col_dir * index) != target[index]){ return 0; }
     }
-}
 
-int is_valid_mas(const GridData *grid_data, int start_row, int start_col, int row_dir, int col_dir, const char* target){
-    int length = strlen(target);
-    for(int i = 0; i < length; i++)
-    {
-        char new_char = get_char(grid_data,start_row + row_dir * i, start_col + col_dir * i);
-        if( new_char != target[i]){
-            if(debug) printf("Match invalid %c does not equal %c\n", new_char, target[i]);
-            return 0;
-        }
-    }
     return 1;
 }
 
-int find_full_matches(const GridData *grid_data, const MatchedCoords *matched_coords, const char* target){
-    int matches = 0;
-    Coordinate directions[8] = DIRECTIONS;
-    for(int potential_matches = 0; potential_matches < matched_coords->matches; potential_matches++){
-        for(int direction = 0; direction < 8; direction++){
-            matches += is_valid_mas(grid_data,matched_coords->coordinates[potential_matches].row,matched_coords->coordinates[potential_matches].col,
-                                    directions[direction].row,directions[direction].col,target);
-        }
-    }
-    return matches;
-}
-
-
-
-int is_valid_xmas(const GridData *grid_data, int pivot_row, int pivot_col){
-
-    if(debug) printf("Checking pivot %c at (%d , %d) \n", get_char(grid_data,pivot_row, pivot_col),pivot_row,pivot_col);
+int is_x_match(const size_t pivot_row, const size_t pivot_col, const char *target){
 
     Coordinate directions[8] = DIRECTIONS;
 
@@ -189,98 +129,108 @@ int is_valid_xmas(const GridData *grid_data, int pivot_row, int pivot_col){
     Coordinate ne_dir = directions[3];
     Coordinate sw_dir = directions[7];
 
-    int se_row_coord = pivot_row - se_dir.row;
-    int se_col_coord = pivot_col - se_dir.col;
+    size_t se_row_coord = pivot_row - se_dir.row;
+    if(se_row_coord > pivot_row) { return 0; }
+    size_t se_col_coord = pivot_col - se_dir.col;
+    if(se_col_coord > pivot_col) { return 0; }
 
-    int nw_row_coord = pivot_row - nw_dir.row;
-    int nw_col_coord = pivot_col - nw_dir.col;
 
-    int se_valid = is_valid_mas(grid_data, se_row_coord, se_col_coord, se_dir.row, se_dir.col, XSEARCH);
-    int nw_valid = is_valid_mas(grid_data, nw_row_coord, nw_col_coord, nw_dir.row, nw_dir.col, XSEARCH);
+    size_t nw_row_coord = pivot_row - nw_dir.row;
+    size_t nw_col_coord = pivot_col - nw_dir.col;
+    /* NW is defined as (-1,-1) so subtracting is actually adding and no underflow check is needed */
 
-    if(se_valid || nw_valid) {
-        if(debug) printf("South East MAS: %d \t North West MAS: %d \n", se_valid, nw_valid);
+    int se_valid = is_word_match(se_row_coord, se_col_coord, se_dir.row, se_dir.col, target);
+    int nw_valid = is_word_match(nw_row_coord, nw_col_coord, nw_dir.row, nw_dir.col, target);
 
-        int ne_row_coord = pivot_row - ne_dir.row;
-        int ne_col_coord = pivot_col - ne_dir.col;
+    if(se_valid || nw_valid){
+        size_t ne_row_coord = pivot_row - ne_dir.row;
+        if(ne_row_coord > pivot_row) { return 0; }
+        size_t ne_col_coord = pivot_col - ne_dir.col;
+        /* The same situation is encountered for any N col check*/
 
-        int sw_row_coord = pivot_row - sw_dir.row;
-        int sw_col_coord = pivot_col - sw_dir.col;
+        size_t sw_row_coord = pivot_row - sw_dir.row;
+        /* Or W row check */
+        size_t sw_col_coord = pivot_col - sw_dir.col;
+        if(sw_col_coord > pivot_col) { return 0; }
 
-        int ne_valid = is_valid_mas(grid_data, ne_row_coord, ne_col_coord, ne_dir.row, ne_dir.col, XSEARCH);
-        int sw_valid = is_valid_mas(grid_data, sw_row_coord, sw_col_coord, sw_dir.row, sw_dir.col, XSEARCH);
+        int ne_valid = is_word_match(ne_row_coord, ne_col_coord, ne_dir.row, ne_dir.col, target);
+        int sw_valid = is_word_match(sw_row_coord, sw_col_coord, sw_dir.row, sw_dir.col, target);
 
-        if(debug) printf("North East MAS %d \t South West MAS %d \n", ne_valid, sw_valid);
-
-        if(ne_valid || sw_valid) {
-            if (debug) printf("Valid X Mas found for (%d , %d) \n", pivot_row, pivot_col);
+        if(ne_valid || sw_valid){
             return 1;
         }
     }
-
     return 0;
 }
 
-int count_valid_xmas(const GridData *grid_data, const MatchedCoords *matched_coords){
-    int matches = 0;
-    for(int potential_matches = 0; potential_matches < matched_coords->matches; potential_matches++) { 
-            if(is_valid_xmas(grid_data,matched_coords->coordinates[potential_matches].row,matched_coords->coordinates[potential_matches].col)){
+size_t count_word_matches(const MatchedCoords *matched_coords, const char *target){
+    size_t matches, potential_matches, direction;
+    matches = 0;
+    Coordinate directions[8] = DIRECTIONS;
+    for(potential_matches = 0; potential_matches < matched_coords->matches; potential_matches++){
+        for(direction = 0; direction < 8; direction++){
+            matches += is_word_match(matched_coords->coordinates[potential_matches].row,
+                                    matched_coords->coordinates[potential_matches].col,
+                                    directions[direction].row,directions[direction].col,target);
+        }
+    }
+    return matches;
+}
+
+size_t count_x_matches(const MatchedCoords *matched_coords, const char *target){
+    size_t matches, potential_matches;
+
+    matches = 0;
+    for(potential_matches = 0; potential_matches < matched_coords->matches; potential_matches++){
+            if(is_x_match(matched_coords->coordinates[potential_matches].row,matched_coords->coordinates[potential_matches].col,target)){
                 matches++;
             }
     }
     return matches;
 }
 
-int main(int argc, char *argv[]) {
+int main(int argc, char *argv[]){
     const char *filename = "input.txt";
-    const char *target = SEARCH;
+    int debug = 0;
 
-    for (int i = 1; i < argc; i++){
-        if (strcmp(argv[i], "--debug") == 0){ // Check if a debug argument is passed.
+    int arg;
+    for (arg = 1; arg < argc; arg++){
+        if (strcmp(argv[arg], "--debug") == 0){ /* Check if a debug argument is passed. */
             debug = 1;
-        } else if (strcmp(argv[i], "--file") == 0 && i + 1 < argc){ //Check if a file argument is passed.
-            filename = argv[++i];
-        } else if (strcmp(argv[i], "--target") == 0 && i + 1 < argc){ //Check if a target argument is passed.
-            target = argv[++i];
+        } else if (strcmp(argv[arg], "--file") == 0 && arg + 1 < argc){ /* Check if a file argument is passed. */
+            filename = argv[++arg];
         } else {
-            fprintf(stderr, "Unkown argument: %s\n", argv[i]); //If an improprer argument is pased exit out.
+            fprintf(stderr, "Unkown argument: %s\n", argv[arg]); /* If an improprer argument is pased exit out. */
             return EXIT_FAILURE;
         }
     }
-    if(debug) printf("---->BEGINING OF DEBUG OUTPUT<----\n"); 
-    //Make sure the search target is not empty
-    if(target[0]=='\0') {
-        fprintf(stderr, "Error: Search target cannot be empty.\n");
-        exit(EXIT_FAILURE);
-    }
-    GridData grid_data;
 
-    input_handler(filename, &grid_data);
+    fill_grid(filename);
 
-
-
- 
-    MatchedCoords part1_coords;
-    create_match_coords(&grid_data,&part1_coords, target[0]);
-
-    if(debug) {
-        print_grid(&grid_data);
-        printf("Grid size: %dx%d\n",grid_data.rows,grid_data.cols);
-        printf("Found %d potential matches\n", part1_coords.matches);
-        printf("---->END OF DEBUG OUTPUT<----\n");
-
-    }
-
-    printf("Found %d full matches\n", find_full_matches(&grid_data, &part1_coords, target));
+    MatchedCoords part1_coords = matched_char_coords(PART1[0]);
+    printf("Found " SIZE_T_STATIC " full matches\n", PRINT_SIZE_T(count_word_matches(&part1_coords, PART1)));
     free(part1_coords.coordinates);
-    MatchedCoords part2_coords;
-    create_match_coords(&grid_data,&part2_coords,'A');
-    printf("Found %d X MAS's\n", count_valid_xmas(&grid_data,&part2_coords));
-    free(part2_coords.coordinates);
-    for(int i = 0; i < grid_data.rows; i++){
-        free(grid_data.grid[i]);
-    }
-    free(grid_data.grid);
 
+    MatchedCoords part2_coords = matched_char_coords(PART2[1]);
+    printf("Found " SIZE_T_STATIC " X %s's\n", PRINT_SIZE_T(count_x_matches(&part2_coords, PART2)),PART2);
+    free(part2_coords.coordinates);
+
+    if(debug){
+        printf("-------DEBUG--------\n");
+        print_grid();
+        printf("-------END-------\n");
+    }
     return 0;
 }
+/* Functions only used in debug mode */
+void print_grid(){
+    size_t row,col;
+    for (row = 0; row < MAXDIMENSION; row++){
+        printf("Line " SIZE_T_DYNAMIC ": ", 3, PRINT_SIZE_T(row+1));
+        for(col = 0; col < MAXDIMENSION; col++){
+            printf("%c",get_char(row,col));
+        }
+        printf("\n");
+    }
+}
+
