@@ -41,7 +41,6 @@ size_t count_x_matches(const MatchedCoords *matched_coords, const char *target);
 void print_grid();
 
 /* Definitions */
-
 void fill_grid(const char* filename){
     FILE *file = fopen(filename, "r");
     if (file == NULL){
