@@ -44,9 +44,10 @@ unsigned long calc_result(const struct UpdateList *update_list, const struct Rul
 
     for(update_index = 0; update_index < update_list->sets; update_index++) {
         struct RuleSet temp_rules = {0};
+        unsigned long middle_index = update_list->update_set[update_index].updates/2;
         construct_temp_ruleset(&update_list->update_set[update_index],&temp_rules);
         if(valid_update_set(page_rules, &temp_rules) == TRUE) {
-            result += update_list->update_set[update_index].update[update_list->update_set[update_index].updates/2];
+            result += update_list->update_set[update_index].update[middle_index];
         }
     }
 
@@ -57,9 +58,9 @@ void construct_temp_ruleset(const struct UpdateSet *update_set, struct RuleSet *
     struct Rule temp_rule = {0};
     unsigned long update_index;
 
-    for(update_index = 0; update_index < update_set->updates && update_index < MAX_UPDATES; update_index++) {
+    for(update_index = 0; update_index < update_set->updates; update_index++) {
         unsigned long temp_index;
-        for(temp_index = update_index + 1; temp_index < update_set->updates && temp_index < MAX_UPDATES; temp_index++) {
+        for(temp_index = update_index + 1; temp_index < update_set->updates; temp_index++) {
             temp_rule.precedes = update_set->update[update_index];
             temp_rule.follows = update_set->update[temp_index];
             temp_rules->rules[temp_rules->count] = temp_rule;
@@ -70,14 +71,19 @@ void construct_temp_ruleset(const struct UpdateSet *update_set, struct RuleSet *
 
 bool valid_update_set(const struct RuleSet *page_rules, const struct RuleSet *temp_rules) {
     bool valid = TRUE;
-    unsigned int page_index, temp_index;
-    for(temp_index = 0; temp_index < temp_rules->count && valid == TRUE; temp_index++) {
-        for(page_index = 0; page_index < page_rules->count; page_index++) {
-            if(temp_rules->rules[temp_index].follows == page_rules->rules[page_index].precedes &&
-               temp_rules->rules[temp_index].precedes == page_rules->rules[page_index].follows)
+    unsigned long page_index, temp_index;
+    struct Rule temp_rule, page_rule;
+
+    for(temp_index = 0; temp_index < temp_rules->count && valid; temp_index++) {
+        temp_rule = temp_rules->rules[temp_index];
+        for(page_index = 0; page_index < page_rules->count && valid; page_index++) {
+            page_rule = page_rules->rules[page_index];
+            if(temp_rule.follows == page_rule.precedes &&
+               temp_rule.precedes == page_rule.follows)
                     valid = FALSE;
         }
     }
+
     return valid;
 }
 
@@ -164,16 +170,28 @@ void input_handler(const char* filename, struct RuleSet *page_rules, struct Upda
                     page_rules->count++;
                 }
 
-                else printf("Too many inputs. Buffer size too small.");
+                else {
+                    printf("Too many inputs. Buffer size too small.");
+                    exit(EXIT_FAILURE);
+                }
             }
         }
 
         if(updating) {
 
-            unsigned int updates_index = 0;
-            token = strtok(line, ",");
-            while (token != NULL && updates_index < MAX_UPDATES) {
+            if(update_list->sets >= MAX_UPDATE_SETS){
+                printf("Error: too many update sets.");
+                exit(EXIT_FAILURE);
+            }
 
+            unsigned long updates_index = 0;
+            token = strtok(line, ",");
+
+            while (token != NULL) {
+                if(updates_index >= MAX_UPDATES) {
+                    printf("Error: Too many updates for this set.");
+                    exit(EXIT_FAILURE);
+                }
                 errno = 0;
                 unsigned long update = strtoul(token,&endptr,10);
                 if(errno == ERANGE) {
@@ -184,16 +202,18 @@ void input_handler(const char* filename, struct RuleSet *page_rules, struct Upda
                 update_list->update_set[update_list->sets].update[updates_index] = update;
 
                 if((*endptr != '\0' && *endptr != '\n')) {
-                    printf("Invalid Number in line: %s\n", line);
-                    break;
+                    printf("Error: Invalid Number in line: %s\n", line);
+                    exit(EXIT_FAILURE);
                 }
 
                 updates_index++;
                 token = strtok(NULL, ",");
             }
+
             update_list->update_set[update_list->sets].updates = updates_index;
             update_list->sets++;
         }
     }
+
     fclose(file);
 }
