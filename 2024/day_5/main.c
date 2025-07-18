@@ -22,6 +22,10 @@ void print_input(const struct RuleSet *page_rules, const struct UpdateList *upda
 bool valid_update_set(const struct RuleSet *page_rules, const struct RuleSet *temp_rules);
 void construct_temp_ruleset(const struct UpdateSet *update_set, struct RuleSet *temp_rules);
 unsigned long calc_result(const struct UpdateList *update_list, const struct RuleSet *page_rules);
+struct Rule find_invalid_rule(const struct RuleSet *page_rules, const struct RuleSet *temp_rules);
+unsigned long get_update_index(const struct UpdateSet *update_rules, const unsigned long update);
+unsigned long correct_update_set(const struct RuleSet *page_rules, struct UpdateSet *invalid_set);
+unsigned long calc_result_of_fixed(const struct RuleSet *page_rules, struct UpdateList *update_list);
 
 int main(int argc, char *argv[]) {
     struct RuleSet page_rules = {0};
@@ -33,9 +37,80 @@ int main(int argc, char *argv[]) {
     }
 
     input_handler(filename, &page_rules, &update_list);
+    printf("Part 1: %lu\n",calc_result(&update_list, &page_rules));
+    printf("Part 2: %lu\n", calc_result_of_fixed(&page_rules,&update_list));
 
-    printf("Result: %lu \n",calc_result(&update_list, &page_rules));
     return 0;
+}
+
+
+unsigned long calc_result_of_fixed(const struct RuleSet *page_rules, struct UpdateList *update_list) {
+    unsigned long update_index;
+    unsigned long sum = 0;
+
+    for(update_index = 0; update_index < update_list->sets; update_index++) {
+        struct RuleSet temp_rules = {0};
+        struct UpdateSet *current_update = &update_list->update_set[update_index];
+
+        construct_temp_ruleset(current_update,&temp_rules);
+        if(!valid_update_set(page_rules,&temp_rules)) {
+            sum += correct_update_set(page_rules, current_update);
+        }
+    }
+    return sum;
+}
+
+unsigned long correct_update_set(const struct RuleSet *page_rules, struct UpdateSet *invalid_set) {
+    struct RuleSet temp_rules = {0};
+    unsigned long max_iterations = MAX_RULES * 2;
+    unsigned long iterations = 0;
+
+    construct_temp_ruleset(invalid_set, &temp_rules);
+    while(!valid_update_set(page_rules, &temp_rules) && iterations <= max_iterations) {
+        struct Rule temp_rule = find_invalid_rule(page_rules, &temp_rules);
+        printf("[%lu, %lu] - ",temp_rule.precedes, temp_rule.follows);
+        unsigned long invalid_follows = get_update_index(invalid_set, temp_rule.follows);
+        unsigned long invalid_precedes = get_update_index(invalid_set, temp_rule.precedes);
+        if(invalid_follows == ULONG_MAX || invalid_precedes == ULONG_MAX) {
+            printf("Error: Index of rule [%lu, %lu] not found\n", temp_rule.precedes, temp_rule.follows);
+            exit(EXIT_FAILURE);
+        }
+        printf("%lu, %lu\n", invalid_precedes, invalid_follows);
+        invalid_set->update[invalid_follows] = temp_rule.precedes;
+        invalid_set->update[invalid_precedes] = temp_rule.follows;
+        construct_temp_ruleset(invalid_set, &temp_rules);
+        iterations++;
+    }
+    unsigned long middle_index = invalid_set->updates/2;
+    return invalid_set->update[middle_index];
+}
+
+unsigned long get_update_index(const struct UpdateSet *update_rules,const unsigned long update) {
+    unsigned long update_index;
+    for(update_index = 0; update_index < update_rules->updates; update_index++) {
+        if(update_rules->update[update_index] == update) return update_index;
+    }
+    return ULONG_MAX;
+}
+
+struct Rule find_invalid_rule(const struct RuleSet *page_rules, const struct RuleSet *temp_rules) {
+    unsigned long page_index, temp_index;
+    struct Rule page_rule, temp_rule;
+
+    if(page_rules->count >= MAX_RULES || temp_rules->count >= MAX_RULES) { printf("Error: RuleSet count variable corrupted.\n"); exit(EXIT_FAILURE); }
+
+    for(temp_index = 0; temp_index < temp_rules->count; temp_index++) {
+        temp_rule = temp_rules->rules[temp_index];
+        for(page_index = 0; page_index < page_rules->count; page_index++) {
+            page_rule = page_rules->rules[page_index];
+            if(temp_rule.precedes == page_rule.follows && temp_rule.follows == page_rule.precedes)
+            {
+                return temp_rule;
+            }
+        }
+    }
+    struct Rule no_invalid = {0};
+    return no_invalid;
 }
 
 unsigned long calc_result(const struct UpdateList *update_list, const struct RuleSet *page_rules) {
@@ -44,25 +119,29 @@ unsigned long calc_result(const struct UpdateList *update_list, const struct Rul
 
     for(update_index = 0; update_index < update_list->sets; update_index++) {
         struct RuleSet temp_rules = {0};
-        unsigned long middle_index = update_list->update_set[update_index].updates/2;
-        construct_temp_ruleset(&update_list->update_set[update_index],&temp_rules);
+        struct UpdateSet current_update = update_list->update_set[update_index];
+
+        unsigned long middle_index = current_update.updates/2;
+        construct_temp_ruleset(&current_update,&temp_rules);
         if(valid_update_set(page_rules, &temp_rules) == TRUE) {
-            result += update_list->update_set[update_index].update[middle_index];
+            result += current_update.update[middle_index];
         }
     }
-
     return result;
 }
 
 void construct_temp_ruleset(const struct UpdateSet *update_set, struct RuleSet *temp_rules) {
-    struct Rule temp_rule = {0};
     unsigned long update_index;
+
+    temp_rules->count = 0;
+
+    if(update_set->updates >= MAX_UPDATES) { printf("Error UpdateSet updates variable corrupted.\n"); exit(EXIT_FAILURE); }
 
     for(update_index = 0; update_index < update_set->updates; update_index++) {
         unsigned long temp_index;
         for(temp_index = update_index + 1; temp_index < update_set->updates; temp_index++) {
-            temp_rule.precedes = update_set->update[update_index];
-            temp_rule.follows = update_set->update[temp_index];
+            if(temp_rules->count >= MAX_RULES) { printf("Error: Rules buffer not big enough to hold Temp Rules\n"); exit(EXIT_FAILURE); }
+            struct Rule temp_rule = {update_set->update[update_index],update_set->update[temp_index]};
             temp_rules->rules[temp_rules->count] = temp_rule;
             temp_rules->count += 1;
         }
@@ -74,6 +153,8 @@ bool valid_update_set(const struct RuleSet *page_rules, const struct RuleSet *te
     unsigned long page_index, temp_index;
     struct Rule temp_rule, page_rule;
 
+    if(page_rules->count >= MAX_RULES || temp_rules->count >= MAX_RULES) { printf("Error: RuleSet count variable corrupted.\n"); exit(EXIT_FAILURE); }
+
     for(temp_index = 0; temp_index < temp_rules->count && valid; temp_index++) {
         temp_rule = temp_rules->rules[temp_index];
         for(page_index = 0; page_index < page_rules->count && valid; page_index++) {
@@ -83,7 +164,6 @@ bool valid_update_set(const struct RuleSet *page_rules, const struct RuleSet *te
                     valid = FALSE;
         }
     }
-
     return valid;
 }
 
@@ -108,9 +188,7 @@ void print_input(const struct RuleSet *page_rules, const struct UpdateList *upda
     }
 }
 
-
 void input_handler(const char* filename, struct RuleSet *page_rules, struct UpdateList *update_list) {
-
     FILE *file = fopen(filename, "r");
 
     if (file == NULL) {
@@ -209,11 +287,9 @@ void input_handler(const char* filename, struct RuleSet *page_rules, struct Upda
                 updates_index++;
                 token = strtok(NULL, ",");
             }
-
             update_list->update_set[update_list->sets].updates = updates_index;
             update_list->sets++;
         }
     }
-
     fclose(file);
 }
