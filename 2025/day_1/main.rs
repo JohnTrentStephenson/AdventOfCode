@@ -65,9 +65,9 @@ fn part2(lines: Lines) -> i32 {
         match operation_char {
             'R' => {
                 total += number;
-                while total > 99 {
-                    total -= 100;
-                    count += 1;
+                if total > 99 {
+                    count += total / 100;
+                    total %= 100;
                 }
             }
             'L' => {
