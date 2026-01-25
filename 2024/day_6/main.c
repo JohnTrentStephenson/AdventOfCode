@@ -33,7 +33,7 @@ void input_handler(const char* filename,char board[][MAX]) {
 
     while (fgets(line, sizeof(line), file)) {
         if(index >= MAX) { printf("Error: Too many lines, buffer too small."); exit(EXIT_FAILURE); }
-        //printf("%lu , %s\n",index,line);
+        /** printf("%lu , %s\n",index,line); **/
         strcpy(line,board[index]);
         index++;
     }
