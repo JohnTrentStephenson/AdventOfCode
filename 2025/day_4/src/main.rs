@@ -44,7 +44,7 @@ fn part_2(grid: &mut Vec<Vec<char>>) -> u32 {
         removed = false;
         for r in 0..grid.len(){
             for c in 0..grid[r].len(){
-                if grid[r][c] == SYMBOL && check_neighbors(grid,r,c){
+                if grid[r][c] == SYMBOL && check_neighbors(grid,r,c) {
                     grid[r][c] = 'x';
                     count +=1;
                     removed = true;
