@@ -56,3 +56,7 @@ dkms.conf
 
 # Rustc executable
 main
+
+#rust target and .lock
+Cargo.lock
+target/
